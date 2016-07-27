@@ -57,7 +57,7 @@ def _mnist_fs(x, y_):
     correct = tf.nn.in_top_k(logits, labels, 1)
     #Return the number of true entries.
     accuracy =  tf.reduce_sum(tf.cast(correct, tf.int32))
-    return {"inference":logits, "loss":loss, "accuracy":accuracy}
+    return {"inference":logits, "loss":loss, "accuracy":accuracy, "losses":[]}
 
 def mnist_fs(batch_size):
     global placeholder_dict
