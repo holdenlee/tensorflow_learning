@@ -20,8 +20,10 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import sys
 
 from six.moves import xrange  # pylint: disable=redefined-builtin
+from six.moves import urllib
 import tensorflow as tf
 
 # Process images of this size. Note that this differs from the original CIFAR

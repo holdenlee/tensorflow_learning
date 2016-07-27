@@ -234,6 +234,7 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
   """
   #global counter
   with tf.Graph().as_default():
+    print("Building graph...")
     global_step = tf.Variable(0, trainable=False)
     funcs = fs()
     loss = funcs["loss"]
@@ -259,7 +260,7 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
     tf.train.start_queue_runners(sess=sess)
 
     summary_writer = tf.train.SummaryWriter(train_dir, sess.graph)
-
+    print("Initialized.")
     for step in xrange(max_steps):
       start_time = time.time()
       feed_dict = map_feed_dict(merge_two_dicts(
@@ -274,7 +275,6 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
       duration = time.time() - start_time
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
-
       if valid_pos_int(output_steps) and step % output_steps == 0:
         num_examples_per_step = batch_size
         examples_per_sec = num_examples_per_step / duration
@@ -284,14 +284,14 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
                       'sec/batch)')
         print (format_str % (datetime.now(), step, loss_value,
                              examples_per_sec, sec_per_batch))
-
       if valid_pos_int(summary_steps) and step % summary_steps == 0:
+        print("Running summary...")
         summary_str = sess.run(summary_op, feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
-
       # Save the model checkpoint periodically.
       if (valid_pos_int(save_steps) and step % save_steps == 0) or (step + 1) == max_steps:
         checkpoint_path = os.path.join(train_dir, 'model.ckpt')
+        print("Saving as %d" % checkpoint_path)
         saver.save(sess, checkpoint_path, global_step=step)
       if ((valid_pos_int(eval_steps) and (step + 1) % (eval_steps) == 0)) or (eval_steps!=None and (step + 1) == max_steps):
         for (data, name) in zip([train_data,validation_data,test_data], ["Training", "Validation", "Test"]):

@@ -78,14 +78,11 @@ inference = compile_net(Net(
             Apply(tf.nn.max_pool, merge_two_dicts(pool_params, {"name":'pool1'})),
             #local response normalization: http://stackoverflow.com/questions/37376861/what-does-the-tf-nn-lrn-method-do
              Apply(tf.nn.lrn, merge_two_dicts(lrn_args, {"name":"norm1"}))]),
-         Apply(get_dim),
          Scope("conv2", [
             Apply(conv_layer, {"name":"conv2"}),
             Apply(tf.nn.lrn, merge_two_dicts(lrn_args, {"name":"norm2"})),
             Apply(tf.nn.max_pool, merge_two_dicts(pool_params, {"name":'pool2'}))]),
-         Apply(get_dim),
          Apply(tf.reshape, {"shape": [FLAGS.batch_size, -1]}),
-         Apply(get_dim),
          Scope("local3", [
             Apply(relu_layer),
             Apply(activation_summary)]),
@@ -93,7 +90,7 @@ inference = compile_net(Net(
             Apply(relu_layer),
             Apply(activation_summary)]),
          Scope("softmax_linear", [
-            Apply(linear_layer, {}),
+            Apply(linear_layer),
             Apply(activation_summary)])]))
 
 def loss(logits, labels):

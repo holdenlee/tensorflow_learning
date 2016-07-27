@@ -44,6 +44,7 @@ import numpy as np
 from six.moves import xrange  # pylint: disable=redefined-builtin
 import tensorflow as tf
 
+
 #from tensorflow.models.image.cifar10 import cifar10
 from cifar10_model import *
 from cifar10_input import *
@@ -51,7 +52,7 @@ from nets import *
 
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('train_dir', '/tigress/holdenl/tmp/cifar10_f_train',
+tf.app.flags.DEFINE_string('train_dir', '/tigress/holdenl/tmp/cifar10_train',
                            """Directory where to write event logs """
                            """and checkpoint.""")
 tf.app.flags.DEFINE_integer('max_steps', 1000000,
