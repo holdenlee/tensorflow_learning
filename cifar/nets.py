@@ -291,7 +291,7 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
       # Save the model checkpoint periodically.
       if (valid_pos_int(save_steps) and step % save_steps == 0) or (step + 1) == max_steps:
         checkpoint_path = os.path.join(train_dir, 'model.ckpt')
-        print("Saving as %d" % checkpoint_path)
+        print("Saving as %s" % checkpoint_path)
         saver.save(sess, checkpoint_path, global_step=step)
       if ((valid_pos_int(eval_steps) and (step + 1) % (eval_steps) == 0)) or (eval_steps!=None and (step + 1) == max_steps):
         for (data, name) in zip([train_data,validation_data,test_data], ["Training", "Validation", "Test"]):

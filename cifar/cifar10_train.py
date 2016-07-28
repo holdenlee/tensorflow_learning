@@ -78,8 +78,10 @@ def main(argv=None):  # pylint: disable=unused-argument
     tf.gfile.DeleteRecursively(FLAGS.train_dir)
   tf.gfile.MakeDirs(FLAGS.train_dir)
 #  tf.get_variable_scope().reuse_variables()
+  summary_f = lambda global_step: tf.train.ExponentialMovingAverage(
+      MOVING_AVERAGE_DECAY, global_step)
   step = lambda fs, global_step: (
-      train_step(fs["loss"], fs["losses"], global_step, lambda gs: tf.train.GradientDescentOptimizer(cifar_lr(gs))))
+      train_step(fs["loss"], fs["losses"], global_step, lambda gs: tf.train.GradientDescentOptimizer(cifar_lr(gs)), summary_f=summary_f))
   train(cifar_fs, step, 
         max_steps=FLAGS.max_steps, 
         train_dir=FLAGS.train_dir, 
