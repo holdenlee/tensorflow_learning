@@ -206,9 +206,12 @@ def train_step(total_loss, losses, global_step, optimizer,
       tf.histogram_summary(var.op.name + '/gradients', grad)
 
   deps = [apply_gradient_op]
-
+  
   if summary_f!=None:
       # Track the moving averages of all trainable variables.
+      #print('Trainables')
+      #for i in tf.trainable_variables():
+      #    print(i, i.name)
       variable_averages = summary_f(global_step)
       variables_averages_op = variable_averages.apply(tf.trainable_variables())
       deps.append(variables_averages_op)

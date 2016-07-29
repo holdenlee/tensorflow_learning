@@ -24,8 +24,9 @@ FLAGS = tf.app.flags.FLAGS
 # Basic model parameters.
 tf.app.flags.DEFINE_integer('batch_size', 128,
                             """Number of images to process in a batch.""")
-tf.app.flags.DEFINE_string('data_dir', '/tigress/knv/cifar10_data',
+tf.app.flags.DEFINE_string('data_dir', '/tigress/knv/cifar10_data/cifar-10-batches-bin',
                            """Path to the CIFAR-10 data directory.""")
+#'/tigress/knv/cifar10_data/'
 
 # Global constants describing the CIFAR-10 data set.
 IMAGE_SIZE = cifar10_input.IMAGE_SIZE
