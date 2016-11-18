@@ -8,6 +8,7 @@ import os.path
 import time
 import numpy as np
 from six.moves import xrange
+from utils import *
 
 def add_bias(x,b,name=None):
     return tf.add(x,b,name)
@@ -18,7 +19,8 @@ def linear_layer(x,W,b, name=None):
 #softmax over batches, l is the number in the batch. (For a single one, l=1.)
 def softmax_layer(x,W,b, name=None):
     """R^{m*n}, R^n, R^{l*m} -> R^{l*n}"""
-    return tf.nn.softmax(tf.matmul(x,W) + b, name)
+    return tf.nn.softmax(tf.matmul(x,W) + b, name=name)
+        
 #Alternatively use to add b:
 #tf.nn.bias_add(value, bias, data_format=None, name=None)
 
@@ -26,9 +28,9 @@ def relu_layer(x,W,b,name=None):
     """R^{m*n}, R^n, R^{l*m} -> R^{l*n}"""
     return tf.nn.relu(tf.matmul(x,W) + b, name)
 
-def cross_entropy(y, yhat):
+def cross_entropy(y, yhat, t=0):
     """R^{l*n}, R^{l*n} -> R"""
-    return tf.reduce_mean(-tf.reduce_sum(y * tf.log(yhat), reduction_indices=[1]))
+    return tf.reduce_mean(-tf.reduce_sum(y * logt(yhat,t), reduction_indices=[-1]))
     #-sum(y *. log(yhat)) where sum is along first axis
     #now take mean
 
@@ -70,42 +72,9 @@ def activation_summary(x):
   return x
 
 """
-Example multi-layer
-reduce(softmax_layer, [(W1,b1),(W2,b2),(W3,b3)], inp)
-makes a 3-layer neural net.
-"""
-
-def merge_two_dicts(x, y):
-    '''Given two dicts, merge them into a new dict as a shallow copy.'''
-    z = x.copy()
-    z.update(y)
-    return z
-
-"""
-def compose(fs, var_dict):
-    def f(x):
-        scope = ""
-        for entry in fs:
-            if isinstance(entry, tuple):
-                (f,args) = entry
-                with tf.variable_scope(scope):
-                    x = eval_with_missing_args(f, x, args, var_dict)
-                    #tf.get_variable_scope().reuse_variables()
-                    #f(x,**args)
-            elif isinstance(entry, str):
-                scope = entry
-            else:
-                entry(x) #side effect
-        return x
-    return f
-"""
-"""
-def fold(f, args):
-    return (lambda x: reduce(f,args,x))
-"""
-#compose(zip(len(args)*[f], args))
 def fold(f, args, x):
     return reduce(lambda y, args: f(y,**args), x)
+"""
 
 def weight_decay(var,wd,add=True):
     loss = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
@@ -113,7 +82,7 @@ def weight_decay(var,wd,add=True):
         tf.add_to_collection('losses', loss)
     return loss
 
-join = itertools.chain.from_iterable
+#join = itertools.chain.from_iterable
 
 def eval_with_missing_args(f,x,d,var_dict):
     t = inspect.getargspec(f)
@@ -134,9 +103,6 @@ def eval_with_missing_args(f,x,d,var_dict):
     #variable_on_cpu(y)
     d2.update(d)
     return f(x,**d2)
-
-def mapkw(f, li):
-    return [f(*l) for l in li]
 
 def add_loss_summaries(total_loss, losses=[], decay=0.9):
   """Add summaries for losses in model.
@@ -167,7 +133,6 @@ def add_loss_summaries(total_loss, losses=[], decay=0.9):
 
 def train_step(total_loss, losses, global_step, optimizer, 
                summary_f=None):
-#lambda gs: tf.train.ExponentialMovingAverage(0.9999, gs)
   """Train model.
 
   Create an optimizer and apply to all trainable variables. Add moving
@@ -221,22 +186,8 @@ def train_step(total_loss, losses, global_step, optimizer,
 def valid_pos_int(n):
     return n!=None and n>0
 
-def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_steps = 1000, max_steps=1000000, train_dir="/", log_device_placement=False, batch_size=128,train_data=None,validation_data=None, test_data=None, train_feed={}, eval_feed={}, x_pl=None, y_pl=None, batch_feeder_args=[]):
-  """
-  Train model.
-
-  Args:
-    fs: Inference function and loss function.
-    step: Function to execute at each training step,
-      takes arguments `loss` and `global_step`
-  Returns:
-    None.
-  """
-  #global counter
-  with tf.Graph().as_default():
-    print("Building graph...")
+def train2(funcs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_steps = 1000, max_steps=1000000, train_dir="/", log_device_placement=False, batch_size=128,train_data=None,validation_data=None, test_data=None, train_feed={}, eval_feed={}, args_pl=None, batch_feeder_args=[], fn=None, verbosity=1):
     global_step = tf.Variable(0, trainable=False)
-    funcs = fs()
     loss = funcs["loss"]
     # Build a Graph that trains the model with one batch of examples and
     # updates the model parameters.
@@ -260,12 +211,13 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
     tf.train.start_queue_runners(sess=sess)
 
     summary_writer = tf.train.SummaryWriter(train_dir, sess.graph)
-    print("Initialized.")
+    print([n.name for n in tf.get_default_graph().as_graph_def().node])
+    printv("Initialized.", verbosity, 1)
     for step in xrange(max_steps):
       start_time = time.time()
       feed_dict = map_feed_dict(merge_two_dicts(
           fill_feed_dict(train_data, batch_size, 
-                         x_pl,y_pl), train_feed))
+                         args_pl), train_feed))
 #                     placeholder_dict["y_"]),
 #      {"fc/keep_prob:0": 0.5})
 #      if feed_dict_fun!=None:
@@ -276,35 +228,52 @@ def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_
 
       assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
       if valid_pos_int(output_steps) and step % output_steps == 0:
-        num_examples_per_step = batch_size
-        examples_per_sec = num_examples_per_step / duration
-        sec_per_batch = float(duration)
-
-        format_str = ('%s: step %d, loss = %.2f (%.1f examples/sec; %.3f '
-                      'sec/batch)')
-        print (format_str % (datetime.now(), step, loss_value,
-                             examples_per_sec, sec_per_batch))
+         output_info(batch_size, step, loss_value, duration)
       if valid_pos_int(summary_steps) and step % summary_steps == 0:
-        print("Running summary...")
+        printv("Running summary...", verbosity, 1)
         summary_str = sess.run(summary_op, feed_dict=feed_dict)
         summary_writer.add_summary(summary_str, step)
       # Save the model checkpoint periodically.
       if (valid_pos_int(save_steps) and step % save_steps == 0) or (step + 1) == max_steps:
         checkpoint_path = os.path.join(train_dir, 'model.ckpt')
-        print("Saving as %d" % checkpoint_path)
+        printv("Saving as %s" % checkpoint_path, verbosity, 1)
         saver.save(sess, checkpoint_path, global_step=step)
       if ((valid_pos_int(eval_steps) and (step + 1) % (eval_steps) == 0)) or (eval_steps!=None and (step + 1) == max_steps):
         for (data, name) in zip([train_data,validation_data,test_data], ["Training", "Validation", "Test"]):
             if data!=None:
-                print('%s Data Eval:' % name)
+                printv('%s Data Eval:' % name, verbosity, 1)
                 do_eval(sess,
                         funcs["accuracy"],
                         data,
                         batch_size,
-                        x_pl,
-                        y_pl,
+                        args_pl,
                         batch_feeder_args,
                         eval_feed)
+      if fn != None:
+        fn(sess)
+#    li = tf.get_collection(tf.GraphKeys.VARIABLES)
+#    for i in li:
+#        print(i.name)
+#    print(tf.get_default_graph().get_tensor_by_name("layer1//W:0"))
+    return sess
+    
+
+def train(fs, step_f, output_steps=10, summary_steps=100, save_steps=1000, eval_steps = 1000, max_steps=1000000, train_dir="/", log_device_placement=False, batch_size=128,train_data=None,validation_data=None, test_data=None, train_feed={}, eval_feed={}, args_pl=None, batch_feeder_args=[] ,verbosity=1):
+    """
+    Train model.
+  
+    Args:
+      fs: Inference function and loss function.
+      step: Function to execute at each training step,
+        takes arguments `loss` and `global_step`
+    Returns:
+      None.
+    """
+    #global counter
+#   with tf.Graph().as_default():
+    printv("Building graph...",verbosity,1)
+    funcs = fs()
+    return train2(funcs, step_f, output_steps, summary_steps, save_steps, eval_steps, max_steps, train_dir, log_device_placement, batch_size,train_data,validation_data, test_data, train_feed, eval_feed, args_pl, batch_feeder_args)
 
 def _conv2d_dims(inp, kern, filt, padding='SAME'):
     if padding == 'SAME':
@@ -339,125 +308,7 @@ def variable_on_cpu(name, shape=None, initializer=None,dtype=tf.float32, var_typ
           var = tf.placeholder(dtype, shape=shape, name=name)
   return var
 
-class Net:
-    def __init__(self, li):
-        self.inputs = [1]
-        self.outputs = [1]
-        self.d = {1:(li, [])}
-
-class Scope:
-    def __init__(self, s, li):
-        self.scope = s
-        self.li = li
-
-class Apply:
-    def __init__(self, f, args={}):
-        self.f = f
-        self.args = args
-
-class Var:
-    def __init__(self, name, shape=None, initializer=None, scope="", dtype=tf.float32, var_type="variable"):
-        self.name=name
-        self.shape=shape
-        self.initializer=initializer
-        self.scope=scope
-        self.dtype=tf.float32
-        self.var_type=var_type
-    def get(self):
-        return (self.name,self.shape,self.initializer,self.scope, self.dtype, self.var_type)
-"""
-class InitVar(Var):
-    def __init__(self, name, shape=None, initializer=None, scope="", dtype=tf.float32):
-        super(InitVar, self).__init__(name, shape, initializer, scope, dtype)
-        self.var_type="var"
-
-class Placeholder(Var):
-    def __init__(self, name, shape=None, initializer=None, scope="", dtype=tf.float32):
-        super(Placeholder, self).__init__(name, shape, initializer, scope, dtype)
-        self.var_type="placeholder"
-"""
-def InitVar(name, shape=None, initializer=None, scope="", dtype=tf.float32):
-    return Var(name, shape, initializer, scope, dtype, "variable")
-
-def Placeholder(name, shape=None, scope="", dtype=tf.float32):
-    return Var(name, shape, None, scope, dtype, "placeholder")
-
-#don't use this
-class InitVars:
-    def __init__(self, li):
-        self.li = li
-
-def concat_scopes(s1, s2):
-    if s2!="":
-        if s1!="":
-            return s1 + "/" + s2
-        else: 
-            return s2
-    else:
-        return s1
-
-#d is actually unnecessary because you can get tensors by name.
-def _compile_list(li, d, scope):
-    def f(x,d):
-        sc = scope
-        for entry in li:
-            if isinstance(entry, Scope):
-                with tf.variable_scope(entry.scope):
-                    g = _compile_list(entry.li, d, concat_scopes(sc, entry.scope))
-                    x, d = g(x)
-            elif isinstance(entry, Var):
-                (name, shape, initializer, scope1, dtype, var_type) = entry.get()
-                scope2 = concat_scopes(sc, scope1)
-                with tf.variable_scope(scope1):
-                    n = concat_scopes(scope2, name)
-                    #print(n, shape)
-                    if var_type=="variable":
-                        d[n] = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
-                    else:
-                        d[n] = tf.placeholder(dtype, shape=shape, name=name)
-#                    d[n] = variable_on_cpu(name, shape, initializer=initializer, dtype=dtype, var_type=var_type)
-                    #print(d[n])
-                    #print(tf.get_default_graph().get_tensor_by_name(n+":0"))
-            elif isinstance(entry, InitVars):
-                for (name, shape, initializer, scope1) in entry.li:
-                    scope2 = concat_scopes(sc, scope1)
-                    #same as above.
-                    with tf.variable_scope(scope1):
-                        n = concat_scopes(scope2, name)
-                        d[n] = variable_on_cpu(name, shape, initializer=initializer)
-            elif isinstance(entry, Apply):
-                f = entry.f
-                args = entry.args
-                #print(scope)
-                #print(type(scope))
-                x = eval_with_missing_args(f, x, args, d)
-                #tf.get_variable_scope().reuse_variables()
-                #f(x,**args)
-            elif isinstance(entry, Net):
-                g = compile_net_with_vars(entry, d, sc)
-                x, d = g(x)
-        return x,d
-    return (lambda x : f(x,d))
-
-def compile_net_with_vars(net, d={}, scope=""):
-    #fix this
-    return _compile_list(net.d[1][0], d, scope)
-
-def compile_net(net, d={},scope=""):
-    return (lambda x: compile_net_with_vars(net, d, scope)(x)[0])
-
-class BatchFeeder(object):
-
-  def __init__(self, xs, ys, num_examples, next_batch_fun):
-      self.xs = xs
-      self.ys = ys
-      self.epochs_completed = 0
-      self.next_batch_fun = next_batch_fun
-
-  def next_batch(self, batch_size, *args):
-      return self.next_batch_fun(self, batch_size, *args)
-
-def fill_feed_dict(batch_feeder, batch_size, x_pl, y_pl=None, args = []):
+def fill_feed_dict(batch_feeder, batch_size, args_pl=None, args = []):
   """Fills the feed_dict for training the given step. Args should be a list.
   A feed_dict takes the form of:
   feed_dict = {
@@ -466,27 +317,69 @@ def fill_feed_dict(batch_feeder, batch_size, x_pl, y_pl=None, args = []):
   }"""
   # Create the feed_dict for the placeholders filled with the next
   # `batch size ` examples.
-  if x_pl == None:
-      return {}
-  if y_pl == None:
-      x_feed = batch_feeder.next_batch(batch_size, *args)
-      feed_dict = {x_pl: x_feed}
+  b = batch_feeder.next_batch(batch_size, *args)
+  if args_pl != None:
+      return {args_pl[k] : b[k] for (k,v) in args_pl.items()}
   else:
-      x_feed, y_feed = batch_feeder.next_batch(batch_size, *args)
-      feed_dict = {
-          x_pl: x_feed,
-          y_pl: y_feed,
-      }
-  return feed_dict
+      return b
+
+class BatchFeeder(object):
+
+  def __init__(self, args, num_examples, next_batch_fun):
+      self.args = args
+      self.index = 0
+      self.num_examples = num_examples
+      self.epochs_completed = 0
+      self.next_batch_fun = next_batch_fun
+
+  def next_batch(self, batch_size, *args):
+      return self.next_batch_fun(self, batch_size, *args)
+
+
+def map_feed_dict(feed_dict):
+    #print(feed_dict)
+    return map_keys(lambda x: tf.get_default_graph().get_tensor_by_name(x) if isinstance(x,str) else x, feed_dict)
+#http://stackoverflow.com/questions/394809/does-python-have-a-ternary-conditional-operator
+#http://stackoverflow.com/questions/644178/how-do-i-re-map-python-dict-keys
+
+def shuffle_refresh(bf):
+    perm = np.arange(bf.num_examples)
+    np.random.shuffle(perm)
+    bf.args = {k : v[perm] for (k,v) in bf.args.items()}
+
+def batch_feeder_f(bf, batch_size, refresh_f = shuffle_refresh):
+    #if bf.xs == None:
+    #    refresh_f(bf)
+    start = bf.index
+    bf.index += batch_size
+    # for simplicity, discard those at end.
+    if bf.index > bf.num_examples:
+      # Finished epoch
+      bf.epochs_completed += 1
+      # Shuffle the data
+      refresh_f(bf)
+      # Start next epoch
+      start = 0
+      bf.index = batch_size
+      assert batch_size <= bf.num_examples
+    end = bf.index
+    return { k : v[start:end] for (k,v) in bf.args.items()}
+
+def make_batch_feeder(args, refresh_f=shuffle_refresh, num_examples = None):
+    if num_examples==None:
+        l = len(args.keys()[0])
+    else:
+        l = num_examples
+    return BatchFeeder(args, l, (lambda bf, batch_size: batch_feeder_f(bf, batch_size, refresh_f)))
 
 def do_eval(sess,
             eval_correct,
             batch_feeder, 
             batch_size,
-            xs_placeholder,
-            ys_placeholder=None,
+            args_pl={},
             args=[],
-            eval_feed={}):
+            eval_feed={},
+            verbosity=1):
   """Runs one evaluation against the full epoch of data.
   Args:
     sess: The session in which the model has been trained.
@@ -500,24 +393,64 @@ def do_eval(sess,
   steps_per_epoch = batch_feeder.num_examples // batch_size
   num_examples = steps_per_epoch * batch_size
   for step in xrange(steps_per_epoch):
-    #if x_pl==None:
-    #    feed_dict = {}
-    #else: 
-    feed_dict = fill_feed_dict(batch_feeder,
-                                   batch_size,
-                                   xs_placeholder,
-                                   ys_placeholder, args)
+    feed_dict = fill_feed_dict(batch_feeder, batch_size, args_pl, args = args)
+    #?
     feed_dict.update(map_feed_dict(eval_feed))
     true_count += sess.run(eval_correct, feed_dict=feed_dict)
   precision = float(true_count) / float(num_examples)
-  print('  Num examples: %d  Num correct: %d  Precision @ 1: %0.04f' %
-        (num_examples, true_count, precision))
+  printv('  Num examples: %d  Num correct: %d  Precision @ 1: %0.04f' %
+         (num_examples, true_count, precision), verbosity, 1)
 
-def map_keys(f, d):
-    return {f(k): v for (k,v) in d.items()}
+"""
+based off code at https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/learn/python/learn/datasets/mnist.py
+"""
 
-def map_feed_dict(feed_dict):
-    #print(feed_dict)
-    return map_keys(lambda x: tf.get_default_graph().get_tensor_by_name(x) if isinstance(x,str) else x, feed_dict)
-#http://stackoverflow.com/questions/394809/does-python-have-a-ternary-conditional-operator
-#http://stackoverflow.com/questions/644178/how-do-i-re-map-python-dict-keys
+#c1, c2 are two collections of variables.
+def am_train_step(total_loss, losses, global_step, optimizer, c1, c2,
+               summary_f=None):
+    loss_averages_op = add_loss_summaries(total_loss, losses)
+    # Compute gradients.
+    with tf.control_dependencies([loss_averages_op]):
+        #must compute loss_averages_op before executing this---Why?
+        opt = optimizer(global_step)
+        grads = opt.compute_gradients(total_loss, c1 if global_step % 2 == 0 else c2)
+
+    # Apply gradients.
+    apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
+
+    # Add histograms for trainable variables.
+    hist_trainables()
+
+    # Add histograms for gradients.
+    hist_grads(grads)
+
+    deps = [apply_gradient_op]
+  
+    apply_summary_f(summary_f, global_step, deps)
+
+    #lump them together
+    return get_train_op(deps)
+
+
+def reuse_var(scope, var):
+    with tf.variable_scope(scope, reuse=True):
+    #scope.reuse_variables()
+        return tf.get_variable(var)
+
+      
+def output_info(batch_size, step, loss_value, duration):
+    examples_per_sec = batch_size / duration
+    sec_per_batch = float(duration)
+    format_str = ('%s: step %d, loss = %.5f (%.1f examples/sec; %.3f '
+                  'sec/batch)')
+    print (format_str % (datetime.now(), step, loss_value,
+                         examples_per_sec, sec_per_batch))
+
+def is_gtr(x, c):
+    return (tf.sign(x-c) + 1)/2
+
+def is_less(x,c):
+    return (1-tf.sign(x-c))/2
+
+def logt(x, t=0):
+    return tf.log(tf.maximum(x, t))

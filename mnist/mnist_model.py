@@ -1,5 +1,6 @@
 import tensorflow as tf
 from nets import *
+from net import *
 
 # The MNIST dataset has 10 classes, representing the digits 0 through 9.
 NUM_CLASSES = 10

@@ -17,6 +17,9 @@ def concat(lli):
 def unzip(li):
     return ([x for (x,y) in li], [y for (x,y) in li])
 
+def mapkw(f, li):
+    return [f(*l) for l in li]
+
 def deepmap(f,li):
     if isinstance(li, list):
         return [deepmap(f, x) for x in li]
@@ -131,12 +134,20 @@ def fors_(llis, f):
 def fors_zip(llis, f):
     return fors(llis, lambda x: (x, f(x)))
 
+"""
+Dictionaries
+"""
 def merge_two_dicts(x, y):
     '''Given two dicts, merge them into a new dict as a shallow copy.'''
     z = x.copy()
     z.update(y)
     return z
 
+def map_keys(f, d):
+    return {f(k): v for (k,v) in d.items()}
+
+def map_vals(f, d):
+    return {k : f(v) for (k,v) in d.items()}
 
 """
 Print functions
